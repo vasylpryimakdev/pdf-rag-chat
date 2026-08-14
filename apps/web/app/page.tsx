@@ -17,6 +17,11 @@ type UserDocument = {
   errorMessage?: string;
 };
 
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -39,6 +44,8 @@ export default function Home() {
   const [emailInput, setEmailInput] = useState("");
   const [email, setEmail] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const documentQuery = useQuery({
     queryKey: ["document", email],
@@ -75,7 +82,19 @@ export default function Home() {
 
   const deleteMutation = useMutation({
     mutationFn: () => api<{ ok: true }>(`/documents/current?email=${encodeURIComponent(email)}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["document", email] })
+    onSuccess: () => {
+      setMessages([]);
+      queryClient.invalidateQueries({ queryKey: ["document", email] });
+    }
+  });
+
+  const chatMutation = useMutation({
+    mutationFn: (text: string) =>
+      api<{ answer: string }>("/chat", {
+        method: "POST",
+        body: JSON.stringify({ email, question: text })
+      }),
+    onSuccess: ({ answer }) => setMessages((items) => [...items, { role: "assistant", content: answer }])
   });
 
   useEffect(() => {
@@ -98,6 +117,8 @@ export default function Home() {
     localStorage.removeItem(EMAIL_STORAGE_KEY);
     setEmail("");
     setEmailInput("");
+    setQuestion("");
+    setMessages([]);
   }
 
   async function handleUpload(file?: File) {
@@ -120,6 +141,17 @@ export default function Home() {
     }
 
     await uploadMutation.mutateAsync(file);
+  }
+
+  async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const text = question.trim();
+    if (!text || !canChat || chatMutation.isPending) return;
+
+    setMessages((items) => [...items, { role: "user", content: text }]);
+    setQuestion("");
+    await chatMutation.mutateAsync(text);
   }
 
   const statusLabel = !currentDocument
@@ -189,14 +221,27 @@ export default function Home() {
           <span className="status-pill">{statusLabel}</span>
         </div>
 
-        <div className="empty-state">
-          <h2>No messages yet</h2>
-          <p>{canChat ? "Ask a question based on your uploaded PDF." : "Upload and process a PDF before asking questions."}</p>
+        <div className="messages">
+          {messages.length === 0 ? (
+            <div className="empty-state">
+              <h2>No messages yet</h2>
+              <p>{canChat ? "Ask a question based on your uploaded PDF." : "Upload and process a PDF before asking questions."}</p>
+            </div>
+          ) : null}
+
+          {messages.map((message, index) => (
+            <div key={`${message.role}-${index}`} className={`message ${message.role}`}>
+              {message.content}
+            </div>
+          ))}
+
+          {chatMutation.isPending ? <div className="message assistant">Thinking...</div> : null}
+          {chatMutation.error ? <p className="error-text">{chatMutation.error.message}</p> : null}
         </div>
 
-        <form className="chat-form">
-          <input placeholder={canChat ? "Chat will be added next" : "Upload and process a PDF first"} disabled />
-          <button type="button" disabled>
+        <form className="chat-form" onSubmit={handleQuestionSubmit}>
+          <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={canChat ? "Ask a question..." : "Upload and process a PDF first"} disabled={!canChat || chatMutation.isPending} />
+          <button type="submit" disabled={!canChat || chatMutation.isPending || !question.trim()}>
             Send
           </button>
         </form>
