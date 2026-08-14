@@ -1,10 +1,16 @@
-import { Controller, Delete, Get, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Post, Query } from "@nestjs/common";
 import { CurrentDocumentQueryDto } from "./dto/current-document-query.dto";
+import { PresignUploadDto } from "./dto/presign-upload.dto";
 import { DocumentsService } from "./documents.service";
 
 @Controller("documents")
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
+
+  @Post("presign")
+  createPresignedUpload(@Body() body: PresignUploadDto) {
+    return this.documentsService.createPresignedUpload(body);
+  }
 
   @Get("current")
   async getCurrent(@Query() query: CurrentDocumentQueryDto) {
