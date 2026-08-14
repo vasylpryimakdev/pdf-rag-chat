@@ -1,5 +1,5 @@
 {
-  "name": "aws-3-test-task",
+  "name": "pdf-rag-chat",
   "private": true,
   "workspaces": [
     "apps/*",
