@@ -37,6 +37,9 @@ export class DocumentsService {
   }
 
   async deleteCurrentByEmail(email: string) {
-    await this.documentModel.findOneAndDelete({ email: email.toLowerCase() }).exec();
+    const document = await this.documentModel.findOneAndDelete({ email: email.toLowerCase() }).exec();
+    if (!document) return;
+
+    await this.s3Service.deleteObject(document.s3Key);
   }
 }
