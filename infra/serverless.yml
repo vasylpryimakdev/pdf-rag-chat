@@ -1,0 +1,103 @@
+service: pdf-rag-chat-ingestion
+
+frameworkVersion: "3"
+
+plugins:
+  - serverless-esbuild
+  - serverless-step-functions
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${env:AWS_REGION, 'us-east-1'}
+  timeout: 60
+  memorySize: 1024
+  environment:
+    S3_BUCKET: ${env:S3_BUCKET}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - states:StartExecution
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+          Resource: arn:aws:s3:::${env:S3_BUCKET}/*
+
+custom:
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    target: node20
+    platform: node
+
+functions:
+  startIngestion:
+    handler: src/handlers.startIngestion
+    environment:
+      STATE_MACHINE_ARN: !Ref IngestionStateMachine
+    events:
+      - s3:
+          bucket: ${env:S3_BUCKET}
+          event: s3:ObjectCreated:Put
+          existing: true
+          rules:
+            - prefix: uploads/
+            - suffix: .pdf
+  extractText:
+    handler: src/handlers.extractText
+  chunkText:
+    handler: src/handlers.chunkText
+  embedChunks:
+    handler: src/handlers.embedChunks
+  indexChunks:
+    handler: src/handlers.indexChunks
+  updateStatusSuccess:
+    handler: src/handlers.updateStatusSuccess
+  updateStatusError:
+    handler: src/handlers.updateStatusError
+
+stepFunctions:
+  stateMachines:
+    ingestion:
+      name: pdf-rag-chat-ingestion-${sls:stage}
+      definition:
+        StartAt: ExtractText
+        States:
+          ExtractText:
+            Type: Task
+            Resource: !GetAtt ExtractTextLambdaFunction.Arn
+            Catch: &ingestionError
+              - ErrorEquals:
+                  - States.ALL
+                ResultPath: $.workflowError
+                Next: UpdateStatusError
+            Next: ChunkText
+          ChunkText:
+            Type: Task
+            Resource: !GetAtt ChunkTextLambdaFunction.Arn
+            Catch: *ingestionError
+            Next: EmbedChunks
+          EmbedChunks:
+            Type: Task
+            Resource: !GetAtt EmbedChunksLambdaFunction.Arn
+            Catch: *ingestionError
+            Next: IndexChunks
+          IndexChunks:
+            Type: Task
+            Resource: !GetAtt IndexChunksLambdaFunction.Arn
+            Catch: *ingestionError
+            Next: UpdateStatusSuccess
+          UpdateStatusSuccess:
+            Type: Task
+            Resource: !GetAtt UpdateStatusSuccessLambdaFunction.Arn
+            End: true
+          UpdateStatusError:
+            Type: Task
+            Resource: !GetAtt UpdateStatusErrorLambdaFunction.Arn
+            End: true

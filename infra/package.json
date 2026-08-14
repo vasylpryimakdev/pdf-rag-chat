@@ -1,5 +1,22 @@
 {
   "name": "infra",
   "private": true,
-  "scripts": {}
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "deploy": "serverless deploy",
+    "remove": "serverless remove"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sfn": "^3.637.0",
+    "serverless-esbuild": "^1.52.1",
+    "serverless-step-functions": "^3.21.2"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.16.5",
+    "serverless": "^3.39.0",
+    "typescript": "^5.5.4"
+  }
 }
