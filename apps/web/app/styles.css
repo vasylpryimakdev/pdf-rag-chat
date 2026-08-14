@@ -105,6 +105,71 @@ input {
   gap: 18px;
 }
 
+.dropzone {
+  border: 2px dashed #a7adff;
+  border-radius: 20px;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  min-height: 150px;
+  place-items: center;
+  text-align: center;
+}
+
+.dropzone.disabled {
+  background: #f8fafc;
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+.dropzone input {
+  display: none;
+}
+
+.dropzone span {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.dropzone small {
+  color: var(--muted);
+}
+
+.document-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.document-status {
+  border-radius: 999px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 10px;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.document-status.pending {
+  background: #f59e0b;
+}
+
+.document-status.success {
+  background: #16a34a;
+}
+
+.document-status.error {
+  background: #dc2626;
+}
+
+.error-text {
+  color: #b42318;
+  margin: 0;
+}
+
 .chat {
   min-height: calc(100vh - 56px);
 }
