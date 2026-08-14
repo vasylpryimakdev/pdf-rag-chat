@@ -1,6 +1,7 @@
 import { ConflictException, Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
+import { PineconeService } from "../ai/pinecone.service";
 import { S3Service } from "../aws/s3.service";
 import { PresignUploadDto } from "./dto/presign-upload.dto";
 import { DocumentEntity, DocumentEntityDocument } from "./schemas/document.schema";
@@ -9,7 +10,8 @@ import { DocumentEntity, DocumentEntityDocument } from "./schemas/document.schem
 export class DocumentsService {
   constructor(
     @InjectModel(DocumentEntity.name) private readonly documentModel: Model<DocumentEntityDocument>,
-    private readonly s3Service: S3Service
+    private readonly s3Service: S3Service,
+    private readonly pineconeService: PineconeService
   ) {}
 
   async createPresignedUpload(dto: PresignUploadDto) {
@@ -40,6 +42,6 @@ export class DocumentsService {
     const document = await this.documentModel.findOneAndDelete({ email: email.toLowerCase() }).exec();
     if (!document) return;
 
-    await this.s3Service.deleteObject(document.s3Key);
+    await Promise.all([this.s3Service.deleteObject(document.s3Key), this.pineconeService.deleteNamespace(document.email)]);
   }
 }
