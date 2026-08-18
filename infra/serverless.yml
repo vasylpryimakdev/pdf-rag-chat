@@ -46,7 +46,7 @@ functions:
   startIngestion:
     handler: src/handlers.startIngestion
     environment:
-      STATE_MACHINE_ARN: !Ref IngestionStateMachine
+      STATE_MACHINE_ARN: !Ref PdfDashragDashchatDashingestionDashdev
     events:
       - s3:
           bucket: ${env:S3_BUCKET}
