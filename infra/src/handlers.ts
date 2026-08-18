@@ -50,6 +50,22 @@ function artifactKey(input: IngestionInput, name: string) {
   return `processing/${documentId}/${name}.json`;
 }
 
+async function withRetry<T>(operation: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
+    }
+  }
+
+  throw lastError;
+}
+
 function splitIntoChunks(text: string) {
   const normalizedText = text.replace(/\s+/g, " ").trim();
   const chunkSize = 1200;
@@ -138,7 +154,14 @@ export async function embedChunks(input: IngestionInput): Promise<IngestionInput
   const { chunks } = await readJson<{ chunks: string[] }>(input.chunksArtifactKey);
 
   const model = gemini.getGenerativeModel({ model: "text-embedding-004" });
-  const embeddings = await Promise.all(chunks.map((chunk) => model.embedContent(chunk)));
+  const embeddings = [];
+  const batchSize = 5;
+
+  for (let start = 0; start < chunks.length; start += batchSize) {
+    const batch = chunks.slice(start, start + batchSize);
+    const batchEmbeddings = await Promise.all(batch.map((chunk) => withRetry(() => model.embedContent(chunk))));
+    embeddings.push(...batchEmbeddings);
+  }
 
   const vectors = embeddings.map((item, index) => ({
     id: createHash("sha1").update(`${input.key}:${index}`).digest("hex"),
@@ -171,7 +194,12 @@ export async function indexChunks(input: IngestionInput): Promise<IngestionInput
     }>;
   }>(input.vectorsArtifactKey);
 
-  await pinecone.index(indexName).namespace(input.email).upsert(vectors);
+  const namespace = pinecone.index(indexName).namespace(input.email);
+  const batchSize = 100;
+
+  for (let start = 0; start < vectors.length; start += batchSize) {
+    await withRetry(() => namespace.upsert(vectors.slice(start, start + batchSize)));
+  }
 
   return input;
 }
