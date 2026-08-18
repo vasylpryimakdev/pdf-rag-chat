@@ -199,8 +199,8 @@ export default function Home() {
             <span className={`document-status ${currentDocument.status}`}>{currentDocument.status}</span>
             <strong>{currentDocument.fileName}</strong>
             {currentDocument.errorMessage ? <small className="error-text">{currentDocument.errorMessage}</small> : null}
-            <button type="button" className="secondary-button" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
-              Delete file
+            <button type="button" className="secondary-button" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending || currentDocument.status === "pending"}>
+              {currentDocument.status === "pending" ? "Processing..." : "Delete file"}
             </button>
           </div>
         ) : (

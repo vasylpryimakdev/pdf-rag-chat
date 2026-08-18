@@ -39,8 +39,14 @@ export class DocumentsService {
   }
 
   async deleteCurrentByEmail(email: string) {
-    const document = await this.documentModel.findOneAndDelete({ email: email.toLowerCase() }).exec();
+    const document = await this.documentModel.findOne({ email: email.toLowerCase() }).exec();
     if (!document) return;
+
+    if (document.status === "pending") {
+      throw new ConflictException("The PDF cannot be deleted while it is being processed.");
+    }
+
+    await this.documentModel.deleteOne({ _id: document._id, status: document.status }).exec();
 
     await Promise.all([this.s3Service.deleteObject(document.s3Key), this.pineconeService.deleteNamespace(document.email)]);
   }
