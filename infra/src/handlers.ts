@@ -12,6 +12,7 @@ const stepFunctions = new SFNClient({});
 const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY ?? "" });
 const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
+const EMBEDDING_MODEL = "gemini-embedding-001";
 
 async function streamToBuffer(stream: NodeJS.ReadableStream) {
   const chunks: Buffer[] = [];
@@ -153,7 +154,7 @@ export async function embedChunks(input: IngestionInput): Promise<IngestionInput
 
   const { chunks } = await readJson<{ chunks: string[] }>(input.chunksArtifactKey);
 
-  const model = gemini.getGenerativeModel({ model: "text-embedding-004" });
+  const model = gemini.getGenerativeModel({ model: EMBEDDING_MODEL });
   const embeddings = [];
   const batchSize = 5;
 

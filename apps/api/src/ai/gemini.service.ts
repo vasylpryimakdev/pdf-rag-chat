@@ -2,6 +2,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
+const EMBEDDING_MODEL = "gemini-embedding-001";
+const CHAT_MODEL = "gemini-2.5-flash";
+
 @Injectable()
 export class GeminiService {
   private readonly client: GoogleGenerativeAI;
@@ -11,14 +14,14 @@ export class GeminiService {
   }
 
   async embed(text: string) {
-    const model = this.client.getGenerativeModel({ model: "text-embedding-004" });
+    const model = this.client.getGenerativeModel({ model: EMBEDDING_MODEL });
     const result = await model.embedContent(text);
 
     return result.embedding.values;
   }
 
   async answerFromContext(question: string, chunks: string[]) {
-    const model = this.client.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = this.client.getGenerativeModel({ model: CHAT_MODEL });
     const prompt = [
       "Answer only from the provided PDF context.",
       "If the context does not contain the answer, say that you cannot find it in the document.",

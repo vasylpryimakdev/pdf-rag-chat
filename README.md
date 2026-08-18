@@ -125,15 +125,15 @@ PINECONE_API_KEY=your-pinecone-key
 PINECONE_INDEX=pdf-rag-chat
 ```
 
-Gemini uses `text-embedding-004` for embeddings. Create the Pinecone index with:
+Gemini uses `gemini-embedding-001` for embeddings. Create the Pinecone index with:
 
 ```text
-Dimension: 768
+Dimension: 3072
 Metric: cosine
 Vector type: dense
 ```
 
-If you previously created an index for OpenAI `text-embedding-3-small`, recreate it or create a new one because OpenAI's `1536` dimensions are not compatible with Gemini's `768` dimensions.
+If you previously created an index with another embedding model, recreate it or create a new one because vector dimensions must match the embedding model. Update `PINECONE_INDEX` in the API and infra environments to point to the new index.
 
 ## AWS Deployment
 
