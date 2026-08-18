@@ -11,6 +11,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.637.0",
     "@aws-sdk/s3-request-presigner": "^3.637.0",
+    "@google/generative-ai": "^0.21.0",
     "@pinecone-database/pinecone": "^3.0.2",
     "@nestjs/common": "^10.4.1",
     "@nestjs/config": "^3.2.3",
@@ -21,7 +22,6 @@
     "class-validator": "^0.14.1",
     "joi": "^17.13.3",
     "mongoose": "^8.6.1",
-    "openai": "^4.57.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

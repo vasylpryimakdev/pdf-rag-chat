@@ -1,15 +1,15 @@
 import type { S3Event } from "aws-lambda";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Pinecone } from "@pinecone-database/pinecone";
 import { createHash } from "crypto";
-import OpenAI from "openai";
 import pdf from "pdf-parse";
 import { connectDb, DocumentModel, type IngestionInput } from "./models.js";
 
 const s3 = new S3Client({});
 const stepFunctions = new SFNClient({});
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY ?? "" });
 
 async function streamToBuffer(stream: NodeJS.ReadableStream) {
@@ -97,14 +97,12 @@ export async function chunkText(input: IngestionInput): Promise<IngestionInput> 
 export async function embedChunks(input: IngestionInput): Promise<IngestionInput> {
   if (!input.email || !input.chunks) throw new Error("Email and chunks are required before embedding");
 
-  const response = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: input.chunks
-  });
+  const model = gemini.getGenerativeModel({ model: "text-embedding-004" });
+  const embeddings = await Promise.all(input.chunks.map((chunk) => model.embedContent(chunk)));
 
-  const vectors = response.data.map((item, index) => ({
+  const vectors = embeddings.map((item, index) => ({
     id: createHash("sha1").update(`${input.key}:${index}`).digest("hex"),
-    values: item.embedding,
+    values: item.embedding.values,
     metadata: {
       email: input.email as string,
       s3Key: input.key,

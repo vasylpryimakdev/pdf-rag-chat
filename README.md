@@ -8,7 +8,7 @@ Test task implementation for a PDF-based AI chat application.
 - Backend: NestJS, TypeScript, MongoDB/Mongoose
 - File storage: AWS S3 with presigned upload URLs
 - Workflow: AWS Step Functions and AWS Lambda
-- AI: OpenAI embeddings and chat completions
+- AI: Gemini embeddings and chat completions
 - Vector DB: Pinecone
 
 ## Project Structure
@@ -33,7 +33,7 @@ infra/      # Serverless Framework, Lambda handlers, Step Functions
 9. Frontend polls `GET /documents/current?email=...` every 2 seconds while status is `pending`.
 10. When status is `success`, chat is enabled.
 11. Frontend sends questions to `POST /chat`.
-12. Backend embeds the question, searches Pinecone, sends relevant chunks to OpenAI, and returns the answer.
+12. Backend embeds the question, searches Pinecone, sends relevant chunks to Gemini, and returns the answer.
 
 ## API Endpoints
 
@@ -103,7 +103,7 @@ WEB_ORIGIN=http://localhost:3000
 MONGODB_URI=mongodb://localhost:27017/pdf-rag-chat
 AWS_REGION=us-east-1
 S3_BUCKET=your-upload-bucket
-OPENAI_API_KEY=sk-your-key
+GEMINI_API_KEY=your-gemini-key
 PINECONE_API_KEY=your-pinecone-key
 PINECONE_INDEX=pdf-rag-chat
 ```
@@ -120,10 +120,20 @@ Infra:
 AWS_REGION=us-east-1
 S3_BUCKET=your-upload-bucket
 MONGODB_URI=mongodb://localhost:27017/pdf-rag-chat
-OPENAI_API_KEY=sk-your-key
+GEMINI_API_KEY=your-gemini-key
 PINECONE_API_KEY=your-pinecone-key
 PINECONE_INDEX=pdf-rag-chat
 ```
+
+Gemini uses `text-embedding-004` for embeddings. Create the Pinecone index with:
+
+```text
+Dimension: 768
+Metric: cosine
+Vector type: dense
+```
+
+If you previously created an index for OpenAI `text-embedding-3-small`, recreate it or create a new one because OpenAI's `1536` dimensions are not compatible with Gemini's `768` dimensions.
 
 ## AWS Deployment
 

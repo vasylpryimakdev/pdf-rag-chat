@@ -6,7 +6,7 @@ export const envValidationSchema = Joi.object({
   MONGODB_URI: Joi.string().required(),
   AWS_REGION: Joi.string().default("us-east-1"),
   S3_BUCKET: Joi.string().required(),
-  OPENAI_API_KEY: Joi.string().required(),
+  GEMINI_API_KEY: Joi.string().required(),
   PINECONE_API_KEY: Joi.string().required(),
   PINECONE_INDEX: Joi.string().required()
 });

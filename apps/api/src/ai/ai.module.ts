@@ -1,9 +1,9 @@
 import { Module } from "@nestjs/common";
-import { OpenAiService } from "./openai.service";
+import { GeminiService } from "./gemini.service";
 import { PineconeService } from "./pinecone.service";
 
 @Module({
-  providers: [OpenAiService, PineconeService],
-  exports: [OpenAiService, PineconeService]
+  providers: [GeminiService, PineconeService],
+  exports: [GeminiService, PineconeService]
 })
 export class AiModule {}
