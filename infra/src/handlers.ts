@@ -1,5 +1,5 @@
 import type { S3Event } from "aws-lambda";
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Pinecone } from "@pinecone-database/pinecone";
@@ -20,6 +20,33 @@ async function streamToBuffer(stream: NodeJS.ReadableStream) {
   }
 
   return Buffer.concat(chunks);
+}
+
+async function readJson<T>(key: string) {
+  const object = await s3.send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
+  if (!object.Body) throw new Error(`S3 artifact has no body: ${key}`);
+
+  const buffer = await streamToBuffer(object.Body as NodeJS.ReadableStream);
+  return JSON.parse(buffer.toString("utf8")) as T;
+}
+
+async function writeJson(key: string, value: unknown) {
+  const bucket = process.env.S3_BUCKET;
+  if (!bucket) throw new Error("S3_BUCKET is required");
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: JSON.stringify(value),
+      ContentType: "application/json"
+    })
+  );
+}
+
+function artifactKey(input: IngestionInput, name: string) {
+  const documentId = createHash("sha1").update(input.key).digest("hex");
+  return `processing/${documentId}/${name}.json`;
 }
 
 function splitIntoChunks(text: string) {
@@ -82,23 +109,32 @@ export async function extractText(input: IngestionInput): Promise<IngestionInput
 
   if (!text) throw new Error("No text found in PDF");
 
-  return { ...input, email: document.email, text };
+  const result = { ...input, email: document.email, textArtifactKey: artifactKey(input, "text") };
+  await writeJson(result.textArtifactKey, { text });
+
+  return result;
 }
 
 export async function chunkText(input: IngestionInput): Promise<IngestionInput> {
-  if (!input.text) throw new Error("Text is required before chunking");
+  if (!input.textArtifactKey) throw new Error("Text artifact is required before chunking");
 
-  const chunks = splitIntoChunks(input.text);
+  const { text } = await readJson<{ text: string }>(input.textArtifactKey);
+  const chunks = splitIntoChunks(text);
   if (chunks.length === 0) throw new Error("No chunks created from PDF text");
 
-  return { ...input, chunks };
+  const result = { ...input, chunksArtifactKey: artifactKey(input, "chunks") };
+  await writeJson(result.chunksArtifactKey, { chunks });
+
+  return result;
 }
 
 export async function embedChunks(input: IngestionInput): Promise<IngestionInput> {
-  if (!input.email || !input.chunks) throw new Error("Email and chunks are required before embedding");
+  if (!input.email || !input.chunksArtifactKey) throw new Error("Email and chunks artifact are required before embedding");
+
+  const { chunks } = await readJson<{ chunks: string[] }>(input.chunksArtifactKey);
 
   const model = gemini.getGenerativeModel({ model: "text-embedding-004" });
-  const embeddings = await Promise.all(input.chunks.map((chunk) => model.embedContent(chunk)));
+  const embeddings = await Promise.all(chunks.map((chunk) => model.embedContent(chunk)));
 
   const vectors = embeddings.map((item, index) => ({
     id: createHash("sha1").update(`${input.key}:${index}`).digest("hex"),
@@ -107,20 +143,31 @@ export async function embedChunks(input: IngestionInput): Promise<IngestionInput
       email: input.email as string,
       s3Key: input.key,
       chunkIndex: index,
-      text: input.chunks?.[index] ?? ""
+      text: chunks[index] ?? ""
     }
   }));
 
-  return { ...input, vectors };
+  const result = { ...input, vectorsArtifactKey: artifactKey(input, "vectors") };
+  await writeJson(result.vectorsArtifactKey, { vectors });
+
+  return result;
 }
 
 export async function indexChunks(input: IngestionInput): Promise<IngestionInput> {
-  if (!input.email || !input.vectors) throw new Error("Email and vectors are required before indexing");
+  if (!input.email || !input.vectorsArtifactKey) throw new Error("Email and vectors artifact are required before indexing");
 
   const indexName = process.env.PINECONE_INDEX;
   if (!indexName) throw new Error("PINECONE_INDEX is required");
 
-  await pinecone.index(indexName).namespace(input.email).upsert(input.vectors);
+  const { vectors } = await readJson<{
+    vectors: Array<{
+      id: string;
+      values: number[];
+      metadata: { email: string; s3Key: string; chunkIndex: number; text: string };
+    }>;
+  }>(input.vectorsArtifactKey);
+
+  await pinecone.index(indexName).namespace(input.email).upsert(vectors);
 
   return input;
 }

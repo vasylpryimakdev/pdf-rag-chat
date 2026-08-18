@@ -4,18 +4,9 @@ export type IngestionInput = {
   bucket: string;
   key: string;
   email?: string;
-  text?: string;
-  chunks?: string[];
-  vectors?: Array<{
-    id: string;
-    values: number[];
-    metadata: {
-      email: string;
-      s3Key: string;
-      chunkIndex: number;
-      text: string;
-    };
-  }>;
+  textArtifactKey?: string;
+  chunksArtifactKey?: string;
+  vectorsArtifactKey?: string;
   workflowError?: { Error?: string; Cause?: string };
 };
 
