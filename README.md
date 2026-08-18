@@ -153,6 +153,22 @@ prefix: uploads/
 suffix: .pdf
 ```
 
+The upload bucket is configured as `existing: true`, so apply browser CORS and
+artifact lifecycle settings separately after creating the bucket:
+
+```bash
+aws s3api put-bucket-cors \
+  --bucket "$S3_BUCKET" \
+  --cors-configuration file://infra/s3-cors.json
+
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket "$S3_BUCKET" \
+  --lifecycle-configuration file://infra/s3-lifecycle.json
+```
+
+For production, replace `AllowedOrigins: ["*"]` in `infra/s3-cors.json` with
+the exact frontend origin.
+
 ## Validation Rules
 
 - Email is stored in `localStorage`.

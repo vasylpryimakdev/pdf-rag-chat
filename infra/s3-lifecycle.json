@@ -1,0 +1,14 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-ingestion-artifacts",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "processing/"
+      },
+      "Expiration": {
+        "Days": 1
+      }
+    }
+  ]
+}
