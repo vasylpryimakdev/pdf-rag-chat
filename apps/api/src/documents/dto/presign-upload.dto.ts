@@ -1,4 +1,4 @@
-import { Equals, IsEmail, IsInt, IsString, Max, Min } from "class-validator";
+import { Equals, IsEmail, IsInt, IsString, Matches, Max, Min } from "class-validator";
 
 export const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
 
@@ -7,6 +7,7 @@ export class PresignUploadDto {
   email!: string;
 
   @IsString()
+  @Matches(/\.pdf$/i, { message: "fileName must have a .pdf extension" })
   fileName!: string;
 
   @Equals("application/pdf")

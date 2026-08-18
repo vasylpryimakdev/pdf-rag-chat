@@ -11,6 +11,7 @@ const s3 = new S3Client({});
 const stepFunctions = new SFNClient({});
 const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY ?? "" });
+const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
 
 async function streamToBuffer(stream: NodeJS.ReadableStream) {
   const chunks: Buffer[] = [];
@@ -104,6 +105,9 @@ export async function extractText(input: IngestionInput): Promise<IngestionInput
   if (!object.Body) throw new Error("S3 object has no body");
 
   const buffer = await streamToBuffer(object.Body as NodeJS.ReadableStream);
+  if (buffer.length > MAX_PDF_SIZE_BYTES) throw new Error("PDF must be 10MB or smaller");
+  if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Uploaded file is not a valid PDF");
+
   const parsed = await pdf(buffer);
   const text = parsed.text.trim();
 

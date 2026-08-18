@@ -130,7 +130,7 @@ export default function Home() {
       return;
     }
 
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
       setUploadError("Only PDF files are accepted.");
       return;
     }
