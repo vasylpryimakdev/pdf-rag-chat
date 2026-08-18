@@ -17,6 +17,7 @@ export type DocumentRecord = {
   s3Key: string;
   status: "pending" | "success" | "error";
   errorMessage?: string;
+  createdAt?: Date;
 };
 
 const documentSchema = new Schema<DocumentRecord>(

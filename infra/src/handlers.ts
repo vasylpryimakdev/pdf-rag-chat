@@ -1,5 +1,5 @@
 import type { S3Event } from "aws-lambda";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Pinecone } from "@pinecone-database/pinecone";
@@ -187,4 +187,27 @@ export async function updateStatusError(input: IngestionInput) {
   await DocumentModel.updateOne({ s3Key: input.key }, { $set: { status: "error", errorMessage: message } }).exec();
 
   return { ok: true };
+}
+
+export async function cleanupPending() {
+  await connectDb();
+
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+  const documents = await DocumentModel.find({ status: "pending", createdAt: { $lt: cutoff } }).exec();
+
+  await Promise.all(
+    documents.map(async (document) => {
+      try {
+        await s3.send(new DeleteObjectCommand({ Bucket: document.s3Bucket, Key: document.s3Key }));
+        await DocumentModel.updateOne(
+          { _id: document._id, status: "pending" },
+          { $set: { status: "error", errorMessage: "Upload or processing timed out." } }
+        ).exec();
+      } catch (error) {
+        console.error(`Failed to clean up pending document ${document.s3Key}`, error);
+      }
+    })
+  );
+
+  return { cleaned: documents.length };
 }
