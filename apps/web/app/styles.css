@@ -39,8 +39,14 @@ textarea {
   font-family: inherit !important;
 }
 .auth-page,
-.workspace-page {
+.workspace-page,
+.loading-page {
   min-height: 100vh;
+}
+.loading-page {
+  display: grid;
+  place-items: center;
+  background: var(--canvas);
 }
 .auth-page {
   display: grid;

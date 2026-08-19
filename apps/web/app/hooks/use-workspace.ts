@@ -11,6 +11,7 @@ export function useWorkspace() {
   const queryClient = useQueryClient();
   const [emailInput, setEmailInput] = useState("");
   const [email, setEmail] = useState("");
+  const [isInitializing, setIsInitializing] = useState(true);
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [uploadError, setUploadError] = useState("");
@@ -91,6 +92,7 @@ export function useWorkspace() {
     const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY) ?? "";
     setEmail(storedEmail);
     setEmailInput(storedEmail);
+    setIsInitializing(false);
   }, []);
 
   function handleAuth(event: FormEvent<HTMLFormElement>) {
@@ -142,6 +144,7 @@ export function useWorkspace() {
 
   return {
     email,
+    isInitializing,
     emailInput,
     setEmailInput,
     question,

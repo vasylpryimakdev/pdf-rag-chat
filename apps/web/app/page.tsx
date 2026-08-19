@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Container } from "@mui/material";
+import { Box, CircularProgress, Container } from "@mui/material";
 import { AuthScreen } from "../components/auth-screen";
 import { ChatPanel } from "../components/chat-panel";
 import { DocumentPanel } from "../components/document-panel";
@@ -9,6 +9,14 @@ import { useWorkspace } from "./hooks/use-workspace";
 
 export default function Home() {
   const workspace = useWorkspace();
+
+  if (workspace.isInitializing) {
+    return (
+      <main className="loading-page" aria-label="Loading workspace">
+        <CircularProgress size={32} aria-label="Loading" />
+      </main>
+    );
+  }
 
   if (!workspace.email) {
     return (
