@@ -11,13 +11,22 @@ export default function Home() {
   const workspace = useWorkspace();
 
   if (!workspace.email) {
-    return <AuthScreen emailInput={workspace.emailInput} onEmailChange={workspace.setEmailInput} onSubmit={workspace.handleAuth} />;
+    return (
+      <AuthScreen
+        emailInput={workspace.emailInput}
+        onEmailChange={workspace.setEmailInput}
+        onSubmit={workspace.handleAuth}
+      />
+    );
   }
 
   return (
     <main className="workspace-page">
       <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 }, height: "100%" }}>
-        <WorkspaceHeader email={workspace.email} onSignOut={workspace.handleSignOut} />
+        <WorkspaceHeader
+          email={workspace.email}
+          onSignOut={workspace.handleSignOut}
+        />
         <Box className="workspace-grid">
           <DocumentPanel
             currentDocument={workspace.currentDocument}

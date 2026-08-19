@@ -18,41 +18,73 @@ export function useWorkspace() {
 
   const documentQuery = useQuery({
     queryKey: ["document", email],
-    queryFn: () => request<UserDocument | null>(`/documents/current?email=${encodeURIComponent(email)}`),
+    queryFn: () =>
+      request<UserDocument | null>(
+        `/documents/current?email=${encodeURIComponent(email)}`,
+      ),
     enabled: Boolean(email),
     retry: false,
-    refetchInterval: (query) => (query.state.data?.status === "pending" ? 2000 : false)
+    refetchInterval: (query) =>
+      query.state.data?.status === "pending" ? 2000 : false,
   });
   const currentDocument = documentQuery.data;
   const canChat = currentDocument?.status === "success";
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const { uploadUrl } = await request<{ uploadUrl: string }>("/documents/presign", {
-        method: "POST",
-        data: { email, fileName: file.name, contentType: "application/pdf", size: file.size }
+      const { uploadUrl } = await request<{ uploadUrl: string }>(
+        "/documents/presign",
+        {
+          method: "POST",
+          data: {
+            email,
+            fileName: file.name,
+            contentType: "application/pdf",
+            size: file.size,
+          },
+        },
+      );
+      await axios.put(uploadUrl, file, {
+        headers: { "Content-Type": "application/pdf" },
       });
-      await axios.put(uploadUrl, file, { headers: { "Content-Type": "application/pdf" } });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["document", email] })
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["document", email] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => request<{ ok: true }>(`/documents/current?email=${encodeURIComponent(email)}`, { method: "DELETE" }),
+    mutationFn: () =>
+      request<{ ok: true }>(
+        `/documents/current?email=${encodeURIComponent(email)}`,
+        { method: "DELETE" },
+      ),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ["document", email] });
-      const previousDocument = queryClient.getQueryData<UserDocument | null>(["document", email]);
+      const previousDocument = queryClient.getQueryData<UserDocument | null>([
+        "document",
+        email,
+      ]);
       queryClient.setQueryData<UserDocument | null>(["document", email], null);
       return { previousDocument };
     },
-    onError: (_error, _variables, context) => queryClient.setQueryData(["document", email], context?.previousDocument),
+    onError: (_error, _variables, context) =>
+      queryClient.setQueryData(["document", email], context?.previousDocument),
     onSuccess: () => setMessages([]),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["document", email] })
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ["document", email] }),
   });
 
   const chatMutation = useMutation({
-    mutationFn: (text: string) => request<{ answer: string }>("/chat", { method: "POST", data: { email, question: text } }),
-    onSuccess: ({ answer }) => setMessages((items) => [...items, { role: "assistant", content: answer }])
+    mutationFn: (text: string) =>
+      request<{ answer: string }>("/chat", {
+        method: "POST",
+        data: { email, question: text },
+      }),
+    onSuccess: ({ answer }) =>
+      setMessages((items) => [
+        ...items,
+        { role: "assistant", content: answer },
+      ]),
   });
 
   useEffect(() => {
@@ -80,9 +112,14 @@ export function useWorkspace() {
   async function handleUpload(file?: File) {
     setUploadError("");
     if (!file) return;
-    if (currentDocument) return setUploadError("Remove the current document before uploading another one.");
-    if (!file.name.toLowerCase().endsWith(".pdf")) return setUploadError("Only PDF files are accepted.");
-    if (file.size > MAX_PDF_SIZE_BYTES) return setUploadError("PDF must be 10MB or smaller.");
+    if (currentDocument)
+      return setUploadError(
+        "Remove the current document before uploading another one.",
+      );
+    if (!file.name.toLowerCase().endsWith(".pdf"))
+      return setUploadError("Only PDF files are accepted.");
+    if (file.size > MAX_PDF_SIZE_BYTES)
+      return setUploadError("PDF must be 10MB or smaller.");
     try {
       await uploadMutation.mutateAsync(file);
     } catch {
@@ -123,6 +160,6 @@ export function useWorkspace() {
     handleAuth,
     handleSignOut,
     handleUpload,
-    handleQuestionSubmit
+    handleQuestionSubmit,
   };
 }
