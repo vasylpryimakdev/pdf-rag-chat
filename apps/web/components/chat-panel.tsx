@@ -15,6 +15,7 @@ import {
 import { alpha } from "@mui/material/styles";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
+import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
 import { FormEvent } from "react";
 import { errorMessage } from "../app/lib/api";
 import { ChatMessage } from "../app/types";
@@ -51,7 +52,12 @@ export function ChatPanel({
         }}
       >
         <Box>
-          <Typography variant="h6">Conversation</Typography>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+            <Box className="panel-icon">
+              <DescriptionOutlinedIcon fontSize="small" />
+            </Box>
+            <Typography variant="h6">Conversation</Typography>
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             Answers grounded in your uploaded PDF
           </Typography>
@@ -88,6 +94,30 @@ export function ChatPanel({
                 ? "Ask for a summary, a key detail, or anything you want to find in the document."
                 : "Upload and process a PDF to unlock the conversation."}
             </Typography>
+            {canChat ? (
+              <Box
+                sx={{
+                  mt: 2,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  gap: 1,
+                }}
+              >
+                {["Summarize this document", "What are the key takeaways?"].map(
+                  (prompt) => (
+                    <Chip
+                      key={prompt}
+                      icon={<LightbulbOutlinedIcon />}
+                      label={prompt}
+                      variant="outlined"
+                      onClick={() => setQuestion(prompt)}
+                      clickable
+                    />
+                  ),
+                )}
+              </Box>
+            ) : null}
           </Box>
         ) : null}
         {messages.map((message, index) => (

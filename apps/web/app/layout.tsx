@@ -4,10 +4,14 @@ import "./styles.css";
 
 export const metadata: Metadata = {
   title: "PDF RAG Chat",
-  description: "Ask questions based on an uploaded PDF"
+  description: "Ask questions based on an uploaded PDF",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body>

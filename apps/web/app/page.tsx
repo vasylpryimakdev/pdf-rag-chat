@@ -22,7 +22,7 @@ export default function Home() {
 
   return (
     <main className="workspace-page">
-      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 }, height: "100%" }}>
+      <Container className="workspace-shell" maxWidth="xl">
         <WorkspaceHeader
           email={workspace.email}
           onSignOut={workspace.handleSignOut}

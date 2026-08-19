@@ -37,7 +37,7 @@ export function AuthScreen({
             color="primary.main"
             sx={{ fontWeight: 800 }}
           >
-            PDF knowledge workspace
+            PDF RAG Chat
           </Typography>
           <Typography variant="h3" sx={{ mt: 1, mb: 1 }}>
             Your documents, ready for questions.

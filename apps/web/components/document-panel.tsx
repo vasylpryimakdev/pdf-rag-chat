@@ -13,6 +13,7 @@ import {
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
+import ShieldOutlinedIcon from "@mui/icons-material/ShieldOutlined";
 import { errorMessage } from "../app/lib/api";
 import { UserDocument } from "../app/types";
 import { StatusChip } from "./status-chip";
@@ -51,7 +52,7 @@ export function DocumentPanel({
         }}
       >
         <Box>
-          <Typography variant="h6">Your source</Typography>
+          <Typography variant="h6">Source document</Typography>
           <Typography variant="body2" color="text.secondary">
             Upload one PDF to ground the answers.
           </Typography>
@@ -63,13 +64,16 @@ export function DocumentPanel({
         className={`upload-zone ${isDragging ? "is-dragging" : ""} ${currentDocument || uploadMutation.isPending ? "is-disabled" : ""}`}
         onDragOver={(event) => {
           event.preventDefault();
-          if (!currentDocument) setIsDragging(true);
+          if (!currentDocument && !uploadMutation.isPending)
+            setIsDragging(true);
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={(event) => {
           event.preventDefault();
           setIsDragging(false);
-          void onUpload(event.dataTransfer.files[0]);
+          if (!currentDocument && !uploadMutation.isPending) {
+            void onUpload(event.dataTransfer.files[0]);
+          }
         }}
       >
         {uploadMutation.isPending ? (
@@ -82,10 +86,14 @@ export function DocumentPanel({
         <Typography sx={{ fontWeight: 800 }}>
           {uploadMutation.isPending
             ? "Uploading document"
-            : "Drop your PDF here"}
+            : currentDocument
+              ? "Document added"
+              : "Drop your PDF here"}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          or click to browse · PDF up to 10MB
+          {currentDocument
+            ? "Remove it to upload a different file"
+            : "or click to browse · PDF up to 10MB"}
         </Typography>
         <input
           hidden
@@ -110,7 +118,12 @@ export function DocumentPanel({
       ) : null}
       <Divider sx={{ my: 3 }} />
       {documentLoading ? (
-        <LinearProgress />
+        <Stack spacing={1.5}>
+          <LinearProgress />
+          <Typography variant="caption" color="text.secondary">
+            Checking your workspace...
+          </Typography>
+        </Stack>
       ) : currentDocument ? (
         <Stack spacing={1.5} sx={{ p: 2, bgcolor: "grey.50", borderRadius: 2 }}>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
@@ -152,9 +165,16 @@ export function DocumentPanel({
           ) : null}
         </Stack>
       ) : (
-        <Typography variant="body2" color="text.secondary">
-          No document uploaded yet.
-        </Typography>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: "center", color: "text.secondary" }}
+        >
+          <ShieldOutlinedIcon fontSize="small" />
+          <Typography variant="body2">
+            Your document stays private to this workspace.
+          </Typography>
+        </Stack>
       )}
       {documentError ? (
         <Alert severity="error" sx={{ mt: 2 }}>
