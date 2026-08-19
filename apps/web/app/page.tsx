@@ -1,14 +1,40 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Container,
+  Divider,
+  IconButton,
+  InputAdornment,
+  LinearProgress,
+  Paper,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
+import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
+import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
+import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
+import SendRoundedIcon from "@mui/icons-material/SendRounded";
+import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import { FormEvent, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const EMAIL_STORAGE_KEY = "pdf-rag-chat-email";
 const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
 
 type DocumentStatus = "pending" | "success" | "error";
-
 type UserDocument = {
   id: string;
   email: string;
@@ -16,85 +42,125 @@ type UserDocument = {
   status: DocumentStatus;
   errorMessage?: string;
 };
+type ChatMessage = { role: "user" | "assistant"; content: string };
 
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
+const api = axios.create({
+  baseURL: API_URL,
+  headers: { "Content-Type": "application/json" },
+});
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers
-    }
-  });
+async function request<T>(
+  path: string,
+  config?: Parameters<typeof api.request>[0],
+) {
+  const response = await api.request<T>({ url: path, ...config });
+  return response.data;
+}
 
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(body?.message ?? "Request failed");
-  }
+function errorMessage(error: unknown) {
+  if (axios.isAxiosError(error))
+    return error.response?.data?.message ?? error.message;
+  return error instanceof Error ? error.message : "Something went wrong";
+}
 
-  return response.json() as Promise<T>;
+function StatusChip({ status }: { status?: DocumentStatus }) {
+  const config =
+    status === "success"
+      ? { label: "Ready to chat", color: "success" as const }
+      : status === "pending"
+        ? { label: "Processing", color: "warning" as const }
+        : status === "error"
+          ? { label: "Processing failed", color: "error" as const }
+          : { label: "No document", color: "default" as const };
+
+  return (
+    <Chip
+      label={config.label}
+      color={config.color}
+      size="small"
+      sx={{ fontWeight: 700 }}
+    />
+  );
 }
 
 export default function Home() {
   const queryClient = useQueryClient();
   const [emailInput, setEmailInput] = useState("");
   const [email, setEmail] = useState("");
-  const [uploadError, setUploadError] = useState("");
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [uploadError, setUploadError] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
 
   const documentQuery = useQuery({
     queryKey: ["document", email],
-    queryFn: () => api<UserDocument | null>(`/documents/current?email=${encodeURIComponent(email)}`),
+    queryFn: () =>
+      request<UserDocument | null>(
+        `/documents/current?email=${encodeURIComponent(email)}`,
+      ),
     enabled: Boolean(email),
-    refetchInterval: (query) => (query.state.data?.status === "pending" ? 2000 : false)
+    retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.status === "pending" ? 2000 : false,
   });
-
   const currentDocument = documentQuery.data;
   const canChat = currentDocument?.status === "success";
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const { uploadUrl } = await api<{ uploadUrl: string; key: string }>("/documents/presign", {
-        method: "POST",
-        body: JSON.stringify({
-          email,
-          fileName: file.name,
-          contentType: "application/pdf",
-          size: file.size
-        })
-      });
-
-      const uploadResponse = await fetch(uploadUrl, {
-        method: "PUT",
+      const { uploadUrl } = await request<{ uploadUrl: string }>(
+        "/documents/presign",
+        {
+          method: "POST",
+          data: {
+            email,
+            fileName: file.name,
+            contentType: "application/pdf",
+            size: file.size,
+          },
+        },
+      );
+      await axios.put(uploadUrl, file, {
         headers: { "Content-Type": "application/pdf" },
-        body: file
       });
-
-      if (!uploadResponse.ok) throw new Error("S3 upload failed");
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["document", email] })
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["document", email] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => api<{ ok: true }>(`/documents/current?email=${encodeURIComponent(email)}`, { method: "DELETE" }),
-    onSuccess: () => {
-      setMessages([]);
-      queryClient.invalidateQueries({ queryKey: ["document", email] });
-    }
+    mutationFn: () =>
+      request<{ ok: true }>(
+        `/documents/current?email=${encodeURIComponent(email)}`,
+        { method: "DELETE" },
+      ),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["document", email] });
+      const previousDocument = queryClient.getQueryData<UserDocument | null>([
+        "document",
+        email,
+      ]);
+      queryClient.setQueryData<UserDocument | null>(["document", email], null);
+      return { previousDocument };
+    },
+    onError: (_error, _variables, context) =>
+      queryClient.setQueryData(["document", email], context?.previousDocument),
+    onSuccess: () => setMessages([]),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ["document", email] }),
   });
 
   const chatMutation = useMutation({
     mutationFn: (text: string) =>
-      api<{ answer: string }>("/chat", {
+      request<{ answer: string }>("/chat", {
         method: "POST",
-        body: JSON.stringify({ email, question: text })
+        data: { email, question: text },
       }),
-    onSuccess: ({ answer }) => setMessages((items) => [...items, { role: "assistant", content: answer }])
+    onSuccess: ({ answer }) =>
+      setMessages((items) => [
+        ...items,
+        { role: "assistant", content: answer },
+      ]),
   });
 
   useEffect(() => {
@@ -105,10 +171,8 @@ export default function Home() {
 
   function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     const normalizedEmail = emailInput.trim().toLowerCase();
     if (!normalizedEmail) return;
-
     localStorage.setItem(EMAIL_STORAGE_KEY, normalizedEmail);
     setEmail(normalizedEmail);
   }
@@ -124,128 +188,422 @@ export default function Home() {
   async function handleUpload(file?: File) {
     setUploadError("");
     if (!file) return;
-
-    if (currentDocument) {
-      setUploadError("Delete the current PDF before uploading another one.");
-      return;
+    if (currentDocument)
+      return setUploadError(
+        "Remove the current document before uploading another one.",
+      );
+    if (!file.name.toLowerCase().endsWith(".pdf"))
+      return setUploadError("Only PDF files are accepted.");
+    if (file.size > MAX_PDF_SIZE_BYTES)
+      return setUploadError("PDF must be 10MB or smaller.");
+    try {
+      await uploadMutation.mutateAsync(file);
+    } catch {
+      // The mutation error is rendered in the upload panel.
     }
-
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setUploadError("Only PDF files are accepted.");
-      return;
-    }
-
-    if (file.size > MAX_PDF_SIZE_BYTES) {
-      setUploadError("PDF must be 10MB or smaller.");
-      return;
-    }
-
-    await uploadMutation.mutateAsync(file);
   }
 
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     const text = question.trim();
     if (!text || !canChat || chatMutation.isPending) return;
-
     setMessages((items) => [...items, { role: "user", content: text }]);
     setQuestion("");
-    await chatMutation.mutateAsync(text);
+    try {
+      await chatMutation.mutateAsync(text);
+    } catch {
+      // The mutation error is rendered in the conversation.
+    }
   }
-
-  const statusLabel = !currentDocument
-    ? "Upload a document first"
-    : currentDocument.status === "pending"
-      ? "Document is processing"
-      : currentDocument.status === "error"
-        ? "Processing failed"
-        : "Document is ready";
 
   if (!email) {
     return (
-      <main className="auth-shell">
-        <section className="auth-card">
-          <p className="eyebrow">PDF RAG Chat</p>
-          <h1>Enter your email to continue</h1>
-          <p className="muted">This emulates authentication for the test task.</p>
-
-          <form className="auth-form" onSubmit={handleAuth}>
-            <input type="email" value={emailInput} onChange={(event) => setEmailInput(event.target.value)} placeholder="you@example.com" required />
-            <button type="submit">Continue</button>
-          </form>
-        </section>
+      <main className="auth-page">
+        <Container maxWidth="sm">
+          <Paper className="auth-card" elevation={0}>
+            <Avatar
+              sx={{ bgcolor: "primary.main", width: 56, height: 56, mb: 3 }}
+            >
+              <DescriptionOutlinedIcon />
+            </Avatar>
+            <Typography
+              variant="overline"
+              color="primary.main"
+              sx={{ fontWeight: 800 }}
+            >
+              PDF RAG Chat
+            </Typography>
+            <Typography variant="h3" sx={{ mt: 1, mb: 1 }}>
+              Your documents, ready for questions.
+            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 4 }}>
+              Enter your email to open a private workspace for uploading and
+              exploring one PDF.
+            </Typography>
+            <Box component="form" onSubmit={handleAuth}>
+              <TextField
+                fullWidth
+                label="Work email"
+                type="email"
+                value={emailInput}
+                onChange={(event) => setEmailInput(event.target.value)}
+                placeholder="you@company.com"
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <EmailOutlinedIcon color="action" />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+                required
+              />
+              <Button
+                fullWidth
+                size="large"
+                type="submit"
+                variant="contained"
+                sx={{ mt: 2 }}
+              >
+                Open workspace
+              </Button>
+            </Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 3 }}
+            >
+              Your email is stored locally for this test workspace.
+            </Typography>
+          </Paper>
+        </Container>
       </main>
     );
   }
 
+  const documentLoading = documentQuery.isLoading;
   return (
-    <main className="app-shell">
-      <aside className="sidebar panel">
-        <p className="eyebrow">Signed in as</p>
-        <h2>{email}</h2>
+    <main className="workspace-page">
+      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 }, height: "100%" }}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          sx={{
+            mb: 3,
+            justifyContent: "space-between",
+            alignItems: { md: "center" },
+          }}
+        >
+          <Box>
+            <Typography
+              variant="overline"
+              color="primary.main"
+              sx={{ fontWeight: 800 }}
+            >
+              PDF knowledge workspace
+            </Typography>
+            <Typography variant="h4">Ask your document</Typography>
+          </Box>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+            <Avatar
+              sx={{
+                width: 36,
+                height: 36,
+                bgcolor: "secondary.main",
+                fontSize: 14,
+              }}
+            >
+              {email[0].toUpperCase()}
+            </Avatar>
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {email}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Private workspace
+              </Typography>
+            </Box>
+            <Tooltip title="Change email">
+              <IconButton onClick={handleSignOut} aria-label="Change email">
+                <LogoutOutlinedIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Stack>
 
-        <label className={currentDocument ? "dropzone disabled" : "dropzone"}>
-          <span>Upload PDF</span>
-          <small>Only one file, max 10MB</small>
-          <input type="file" accept="application/pdf,.pdf" disabled={Boolean(currentDocument) || uploadMutation.isPending} onChange={(event) => handleUpload(event.target.files?.[0])} />
-        </label>
+        <Box className="workspace-grid">
+          <Paper className="document-panel" elevation={0}>
+            <Stack
+              direction="row"
+              sx={{
+                mb: 3,
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography variant="h6">Your source</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Upload one PDF to ground the answers.
+                </Typography>
+              </Box>
+              <StatusChip status={currentDocument?.status} />
+            </Stack>
+            <Box
+              component="label"
+              className={`upload-zone ${isDragging ? "is-dragging" : ""} ${currentDocument || uploadMutation.isPending ? "is-disabled" : ""}`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                if (!currentDocument) setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setIsDragging(false);
+                void handleUpload(event.dataTransfer.files[0]);
+              }}
+            >
+              {uploadMutation.isPending ? (
+                <CircularProgress size={32} />
+              ) : (
+                <UploadFileOutlinedIcon
+                  sx={{ fontSize: 38, color: "primary.main" }}
+                />
+              )}
+              <Typography sx={{ fontWeight: 800 }}>
+                {uploadMutation.isPending
+                  ? "Uploading document"
+                  : "Drop your PDF here"}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                or click to browse · PDF up to 10MB
+              </Typography>
+              <input
+                hidden
+                type="file"
+                accept="application/pdf,.pdf"
+                disabled={Boolean(currentDocument) || uploadMutation.isPending}
+                onChange={(event) => {
+                  void handleUpload(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+              />
+            </Box>
+            {uploadError ? (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {uploadError}
+              </Alert>
+            ) : null}
+            {uploadMutation.error ? (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {errorMessage(uploadMutation.error)}
+              </Alert>
+            ) : null}
+            <Divider sx={{ my: 3 }} />
+            {documentLoading ? (
+              <LinearProgress />
+            ) : currentDocument ? (
+              <Stack
+                spacing={1.5}
+                sx={{ p: 2, bgcolor: "grey.50", borderRadius: 2 }}
+              >
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  sx={{ alignItems: "center" }}
+                >
+                  <InsertDriveFileOutlinedIcon color="primary" />
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography sx={{ fontWeight: 700 }} noWrap>
+                      {currentDocument.fileName}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      PDF document
+                    </Typography>
+                  </Box>
+                  <Tooltip title="Delete document">
+                    <IconButton
+                      color="error"
+                      onClick={() => deleteMutation.mutate()}
+                      disabled={
+                        deleteMutation.isPending ||
+                        currentDocument.status === "pending"
+                      }
+                      aria-label="Delete document"
+                    >
+                      {deleteMutation.isPending ? (
+                        <CircularProgress size={20} />
+                      ) : (
+                        <DeleteOutlineIcon />
+                      )}
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+                {currentDocument.status === "pending" ? (
+                  <Typography variant="caption" color="text.secondary">
+                    We are extracting and indexing your document. This usually
+                    takes a moment.
+                  </Typography>
+                ) : null}
+                {currentDocument.errorMessage ? (
+                  <Alert severity="error">{currentDocument.errorMessage}</Alert>
+                ) : null}
+              </Stack>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No document uploaded yet.
+              </Typography>
+            )}
+            {documentQuery.error ? (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {errorMessage(documentQuery.error)}
+              </Alert>
+            ) : null}
+            {deleteMutation.error ? (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {errorMessage(deleteMutation.error)}
+              </Alert>
+            ) : null}
+          </Paper>
 
-        {uploadError ? <p className="error-text">{uploadError}</p> : null}
-        {uploadMutation.error ? <p className="error-text">{uploadMutation.error.message}</p> : null}
-
-        {currentDocument ? (
-          <div className="document-card">
-            <span className={`document-status ${currentDocument.status}`}>{currentDocument.status}</span>
-            <strong>{currentDocument.fileName}</strong>
-            {currentDocument.errorMessage ? <small className="error-text">{currentDocument.errorMessage}</small> : null}
-            <button type="button" className="secondary-button" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending || currentDocument.status === "pending"}>
-              {currentDocument.status === "pending" ? "Processing..." : "Delete file"}
-            </button>
-          </div>
-        ) : (
-          <p className="muted">No document uploaded yet.</p>
-        )}
-
-        <button type="button" className="secondary-button" onClick={handleSignOut}>
-          Change email
-        </button>
-      </aside>
-
-      <section className="chat panel">
-        <div className="chat-header">
-          <div>
-            <p className="eyebrow">Chat</p>
-            <h1>Ask your PDF</h1>
-          </div>
-          <span className="status-pill">{statusLabel}</span>
-        </div>
-
-        <div className="messages">
-          {messages.length === 0 ? (
-            <div className="empty-state">
-              <h2>No messages yet</h2>
-              <p>{canChat ? "Ask a question based on your uploaded PDF." : "Upload and process a PDF before asking questions."}</p>
-            </div>
-          ) : null}
-
-          {messages.map((message, index) => (
-            <div key={`${message.role}-${index}`} className={`message ${message.role}`}>
-              {message.content}
-            </div>
-          ))}
-
-          {chatMutation.isPending ? <div className="message assistant">Thinking...</div> : null}
-          {chatMutation.error ? <p className="error-text">{chatMutation.error.message}</p> : null}
-        </div>
-
-        <form className="chat-form" onSubmit={handleQuestionSubmit}>
-          <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={canChat ? "Ask a question..." : "Upload and process a PDF first"} disabled={!canChat || chatMutation.isPending} />
-          <button type="submit" disabled={!canChat || chatMutation.isPending || !question.trim()}>
-            Send
-          </button>
-        </form>
-      </section>
+          <Paper className="chat-panel" elevation={0}>
+            <Stack
+              direction="row"
+              sx={{
+                p: { xs: 2, md: 3 },
+                borderBottom: "1px solid",
+                borderColor: "divider",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Box>
+                <Typography variant="h6">Conversation</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Answers grounded in your uploaded PDF
+                </Typography>
+              </Box>
+              <Chip
+                icon={<DescriptionOutlinedIcon />}
+                label={canChat ? "Document connected" : "Waiting for document"}
+                color={canChat ? "success" : "default"}
+                variant="outlined"
+              />
+            </Stack>
+            <Box className="message-list">
+              {messages.length === 0 ? (
+                <Box className="chat-empty">
+                  <Avatar
+                    sx={{
+                      bgcolor: (theme) =>
+                        alpha(theme.palette.primary.main, 0.1),
+                      color: "primary.main",
+                      width: 64,
+                      height: 64,
+                    }}
+                  >
+                    <DescriptionOutlinedIcon fontSize="large" />
+                  </Avatar>
+                  <Typography variant="h6" sx={{ mt: 2 }}>
+                    Start with a question
+                  </Typography>
+                  <Typography
+                    color="text.secondary"
+                    align="center"
+                    sx={{ maxWidth: 360 }}
+                  >
+                    {canChat
+                      ? "Ask for a summary, a key detail, or anything you want to find in the document."
+                      : "Upload and process a PDF to unlock the conversation."}
+                  </Typography>
+                </Box>
+              ) : null}
+              {messages.map((message, index) => (
+                <Box
+                  key={`${message.role}-${index}`}
+                  className={`message-bubble ${message.role}`}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 800 }}
+                    color={message.role === "user" ? "inherit" : "primary.main"}
+                  >
+                    {message.role === "user" ? "You" : "Assistant"}
+                  </Typography>
+                  <Typography sx={{ whiteSpace: "pre-wrap", mt: 0.5 }}>
+                    {message.content}
+                  </Typography>
+                </Box>
+              ))}
+              {chatMutation.isPending ? (
+                <Box className="message-bubble assistant">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ alignItems: "center" }}
+                  >
+                    <CircularProgress size={16} />
+                    <Typography>Thinking through your document...</Typography>
+                  </Stack>
+                </Box>
+              ) : null}
+              {chatMutation.error ? (
+                <Alert severity="error">
+                  {errorMessage(chatMutation.error)}
+                </Alert>
+              ) : null}
+            </Box>
+            <Box
+              component="form"
+              onSubmit={handleQuestionSubmit}
+              sx={{
+                p: { xs: 2, md: 3 },
+                borderTop: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <TextField
+                fullWidth
+                multiline
+                maxRows={4}
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                placeholder={
+                  canChat
+                    ? "Ask a question about your PDF..."
+                    : "Upload and process a PDF first"
+                }
+                disabled={!canChat || chatMutation.isPending}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Tooltip title="Send question">
+                          <span>
+                            <IconButton
+                              color="primary"
+                              type="submit"
+                              disabled={
+                                !canChat ||
+                                chatMutation.isPending ||
+                                !question.trim()
+                              }
+                              aria-label="Send question"
+                            >
+                              <SendRoundedIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Box>
+          </Paper>
+        </Box>
+      </Container>
     </main>
   );
 }
