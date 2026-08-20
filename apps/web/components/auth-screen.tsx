@@ -27,18 +27,27 @@ export function AuthScreen({
     <main className="auth-page">
       <Container maxWidth="sm">
         <Paper className="auth-card" elevation={0}>
-          <Avatar
-            sx={{ bgcolor: "primary.main", width: 56, height: 56, mb: 3 }}
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              alignItems: "center",
+              flexDirection: "row",
+            }}
           >
-            <DescriptionOutlinedIcon />
-          </Avatar>
-          <Typography
-            variant="overline"
-            color="primary.main"
-            sx={{ fontWeight: 800 }}
-          >
-            PDF RAG Chat
-          </Typography>
+            <Avatar
+              sx={{ bgcolor: "primary.main", width: 56, height: 56 }}
+            >
+              <DescriptionOutlinedIcon />
+            </Avatar>
+            <Typography
+              variant="overline"
+              color="primary.main"
+              sx={{ fontWeight: 800 }}
+            >
+              PDF RAG Chat
+            </Typography>
+          </Box>
           <Typography variant="h3" sx={{ mt: 1, mb: 1 }}>
             Your documents, ready for questions.
           </Typography>
@@ -75,13 +84,6 @@ export function AuthScreen({
               Open workspace
             </Button>
           </Box>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: "block", mt: 3 }}
-          >
-            Your email is stored locally for this test workspace.
-          </Typography>
         </Paper>
       </Container>
     </main>
